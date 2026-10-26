@@ -3,6 +3,8 @@ import { useMemo, useState } from 'react';
 import { useStore } from '../lib/store';
 import { uid, today, won, whereUsed, partCost } from '../lib/calc';
 import { Modal, Field, Badge, PageHead, Empty } from './ui';
+import CadViewer, { isViewable, viewKind } from './CadViewer';
+import { putFile, delFile } from '../lib/filestore';
 
 const TYPES = ['제품', '조립', '부품'];
 const STATUS = ['작업중', '검토중', '승인', '폐기'];
@@ -15,6 +17,8 @@ export default function PDM({ goto }) {
   const [sel, setSel] = useState(data.parts[0]?.id);
   const [edit, setEdit] = useState(null);
   const [fileForm, setFileForm] = useState(null);
+  const [viewing, setViewing] = useState(null);
+  const [saving, setSaving] = useState(false);
 
   const list = useMemo(() => data.parts.filter((p) =>
     (type === '전체' || p.type === type) &&
@@ -46,20 +50,47 @@ export default function PDM({ goto }) {
     if (whereUsed(data.lines, part.id).length || data.lines.some((l) => l.parent === part.id))
       return notify('BOM에서 사용 중인 부품은 삭제할 수 없습니다. 상태를 ‘폐기’로 바꾸세요');
     if (!confirm(`${part.no} ${part.name}을(를) 삭제할까요?`)) return;
+    part.files.forEach((f) => delFile(f.id));
     update((d) => { d.parts = d.parts.filter((p) => p.id !== part.id); });
     setSel(data.parts.find((p) => p.id !== part.id)?.id);
     notify('부품을 삭제했습니다');
   };
 
-  const addFile = () => {
-    if (!fileForm.name.trim()) return notify('파일 이름을 입력하세요');
+  const addFile = async () => {
+    if (!fileForm.name.trim()) return notify('파일을 선택하거나 이름을 입력하세요');
+    const id = uid();
+    const { file, ...meta } = fileForm;
+    if (file) {
+      setSaving(true);
+      try { await putFile(id, file); } catch {
+        setSaving(false);
+        return notify('파일을 저장하지 못했습니다. 브라우저 저장 공간을 확인하세요');
+      }
+      setSaving(false);
+    }
     update((d) => {
       d.parts.find((p) => p.id === part.id).files.push({
-        id: uid(), ...fileForm, rev: part.rev, date: today(),
+        id, ...meta, size: file?.size || 0, stored: !!file, rev: part.rev, date: today(),
       });
     });
-    notify('파일을 등록했습니다');
+    notify(file ? '파일을 등록했습니다' : '파일 정보를 등록했습니다');
     setFileForm(null);
+  };
+
+  const removeFile = (f) => {
+    if (!confirm(`${f.name}을(를) 삭제할까요?`)) return;
+    delFile(f.id);
+    update((d) => { const p = d.parts.find((x) => x.id === part.id); p.files = p.files.filter((x) => x.id !== f.id); });
+    notify('파일을 삭제했습니다');
+  };
+
+  const pickFile = (file) => {
+    if (!file) return;
+    const ext = file.name.split('.').pop().toLowerCase();
+    const k = viewKind(file.name);
+    const kind = k === '3d' || ['sldprt', 'sldasm', 'ipt', 'iam', 'catpart', 'catproduct', 'x_t', 'prt'].includes(ext) ? '3D 모델'
+      : k === '2d' || ['dwg', 'slddrw'].includes(ext) ? '도면' : '문서';
+    setFileForm({ ...fileForm, file, name: file.name, kind });
   };
 
   const used = part ? whereUsed(data.lines, part.id) : [];
@@ -131,9 +162,19 @@ export default function PDM({ goto }) {
             <h2 className="h2">도면·문서 <button className="link" onClick={() => setFileForm({ kind: '도면', name: '', author: '' })}>파일 등록</button></h2>
             {part.files.length ? (
               <div className="scroll-x"><table className="table compact nowrap">
-                <thead><tr><th>구분</th><th>파일</th><th>Rev</th><th>등록일</th><th>등록자</th></tr></thead>
+                <thead><tr><th>구분</th><th>파일</th><th>Rev</th><th>등록일</th><th>등록자</th><th></th></tr></thead>
                 <tbody>{part.files.map((f) => (
-                  <tr key={f.id}><td>{f.kind}</td><td>{f.name}</td><td className="mono">{f.rev}</td><td className="mono">{f.date}</td><td>{f.author}</td></tr>
+                  <tr key={f.id}>
+                    <td>{f.kind}</td>
+                    <td>{isViewable(f.name)
+                      ? <button className="link file-link" onClick={() => setViewing(f)}>{f.name}</button>
+                      : f.name}</td>
+                    <td className="mono">{f.rev}</td><td className="mono">{f.date}</td><td>{f.author}</td>
+                    <td className="act">
+                      <button className="link" onClick={() => setViewing(f)}>보기</button>
+                      <button className="link danger" onClick={() => removeFile(f)}>삭제</button>
+                    </td>
+                  </tr>
                 ))}</tbody>
               </table></div>
             ) : <Empty>등록된 도면이 없습니다. CAD 파일이나 사양서를 등록하세요.</Empty>}
@@ -182,15 +223,18 @@ export default function PDM({ goto }) {
 
       {fileForm && (
         <Modal title={`${part.no} 파일 등록`} onClose={() => setFileForm(null)}
-          footer={<><button className="btn" onClick={() => setFileForm(null)}>취소</button><button className="btn primary" onClick={addFile}>등록</button></>}>
+          footer={<><button className="btn" onClick={() => setFileForm(null)}>취소</button><button className="btn primary" onClick={addFile} disabled={saving}>{saving ? '저장 중' : '등록'}</button></>}>
           <Field label="구분"><select className="input" value={fileForm.kind} onChange={(e) => setFileForm({ ...fileForm, kind: e.target.value })}><option>도면</option><option>3D 모델</option><option>문서</option></select></Field>
-          <Field label="파일" hint="현재 버전은 파일 정보만 기록합니다. 실제 파일 보관은 README의 Vercel Blob 연동을 참고하세요">
-            <input className="input" type="file" onChange={(e) => setFileForm({ ...fileForm, name: e.target.files[0]?.name || '' })} />
+          <Field label="파일" hint="DXF 도면, STEP·STL·OBJ 3D 모델, PDF, 이미지는 바로 볼 수 있습니다. DWG·SLDPRT 같은 고유 형식은 보관만 됩니다">
+            <input className="input" type="file" accept=".dxf,.dwg,.step,.stp,.iges,.igs,.stl,.obj,.pdf,.png,.jpg,.jpeg,.webp,.svg,.sldprt,.sldasm,.slddrw,.ipt,.iam,.catpart,.x_t,*/*"
+              onChange={(e) => pickFile(e.target.files[0])} />
           </Field>
           <Field label="파일 이름"><input className="input" value={fileForm.name} onChange={(e) => setFileForm({ ...fileForm, name: e.target.value })} /></Field>
           <Field label="등록자"><input className="input" value={fileForm.author} onChange={(e) => setFileForm({ ...fileForm, author: e.target.value })} /></Field>
         </Modal>
       )}
+
+      {viewing && <CadViewer file={viewing} part={part} onClose={() => setViewing(null)} />}
     </>
   );
 }

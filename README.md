@@ -8,7 +8,7 @@ Next.js 14 (App Router) 기반이며 Vercel에 바로 배포할 수 있습니다
 | 메뉴 | 모듈 | 내용 |
 |---|---|---|
 | 현황 | - | 처리할 ECO·계약, 프로젝트 SPI/CPI, 견적 대비 원가 변동 |
-| 부품·도면 | PDM | 부품 마스터, 도면/3D/문서 등록, 리비전 이력, Where-used |
+| 부품·도면 | PDM | 부품 마스터, 도면/3D/문서 등록, CAD 뷰어, 리비전 이력, Where-used |
 | 설계변경 | ECR/ECO | 요청 → 검토 → 승인 → 적용 워크플로, 적용 시 리비전 자동 증가 |
 | Multi-BOM | Multi-BOM | E-BOM/M-BOM/S-BOM 트리 편집, 순환 참조 차단, BOM 간 차이 자동 감지, ERP 업로드용 CSV |
 | 프로젝트 | PMS | WBS 작업·선후행, 간트 차트, Critical Path(CPM), EVMS(PV/EV/AC, SPI/CPI/EAC) |
@@ -64,10 +64,41 @@ cost_models(product_id, ...) / cost_quotes(...)
 price_changes(id, part_id, old, new, reason, status, signed_by, signed_at, hash)
 ```
 
-### 도면 파일 실제 보관
+## CAD 뷰어
 
-지금은 파일명·리비전 등 메타데이터만 기록합니다. 실제 CAD 파일을 올리려면
-Vercel Blob(`@vercel/blob`)을 연결하고 업로드 결과 URL을 `part_files.blob_url`에 저장하세요.
+부품·도면 화면의 파일 목록에서 ‘보기’를 누르면 전체 화면 뷰어가 열립니다.
+
+| 형식 | 표시 방식 | 기능 |
+|---|---|---|
+| DXF | 2D 벡터 (SVG) | 확대·축소·이동, 레이어 켜기/끄기, 거리 측정(끝점·중심점 자동 맞춤), 좌표 표시, 블록·치수 표시, 한글 도면(UTF-8, EUC-KR) |
+| STEP, STP, IGES, IGS | 3D (WebGL) | OpenCascade(occt-import-js)로 변환. 처음 열 때 변환 엔진(수 MB)을 내려받음 |
+| STL, OBJ | 3D (WebGL) | 회전·이동·확대, 정면/윗면/우측면/등각 뷰, 음영·모서리·와이어 표시, 외형 치수 |
+| PDF, PNG, JPG, SVG | 브라우저 기본 표시 | |
+| DWG, SLDPRT, SLDASM, IPT, CATPart 등 | 보관만 가능 | CAD 고유 형식이라 브라우저에서 해석 불가. DXF/PDF/STEP으로 내보내 함께 등록 |
+
+### STEP 변환 엔진 오프라인 사용
+
+기본은 jsDelivr CDN에서 `occt-import-js`를 받아옵니다. 사내망 등 외부 접속이 막힌 환경이라면:
+
+```bash
+npm i occt-import-js
+mkdir -p public/occt
+cp node_modules/occt-import-js/dist/occt-import-js.js node_modules/occt-import-js/dist/occt-import-js.wasm public/occt/
+```
+
+`public/occt/`에 파일이 있으면 그쪽을 먼저 사용합니다 (`lib/mesh.js`의 `OCCT_SOURCES`).
+
+### DWG를 직접 보려면
+
+DWG는 Autodesk 고유 형식이라 무료로 브라우저에서 해석할 방법이 없습니다. 선택지는 두 가지입니다.
+업로드 단계에서 서버가 DXF/PDF로 변환하도록 ODA File Converter를 쓰는 방법(별도 변환 서버 필요, Vercel 함수에서는 실행 불가),
+또는 Autodesk Platform Services(APS) Viewer를 연동하는 방법(DWG·SolidWorks·Inventor 등 대부분 지원, 사용량 기반 유료)입니다.
+
+### 도면 파일 보관 위치
+
+업로드한 파일 원본은 브라우저 **IndexedDB**에 저장됩니다(`lib/filestore.js`). 용량 제한이 넉넉하지만 그 브라우저에서만 보입니다.
+JSON 백업에는 파일 원본이 포함되지 않습니다.
+팀이 같은 파일을 보려면 Vercel Blob(`@vercel/blob`)을 연결하고 `putFile`/`getFile`/`delFile` 세 함수를 Blob 업로드·조회로 바꾸세요.
 
 ### 로그인·권한
 
@@ -78,8 +109,12 @@ ECO 승인·계약 서명 버튼을 역할(설계/검토자/구매/협력사)에
 
 ```
 app/            layout.js, page.js, globals.css
-components/     App(메뉴), Dashboard, PDM, ECO, BOM, PMS, CMS, ui
+components/     App(메뉴), Dashboard, PDM, ECO, BOM, PMS, CMS, CadViewer, ui
 lib/calc.js     BOM 전개·비교, 원가 롤업·견적, CPM, EVMS
 lib/store.js    상태 관리와 저장 (DB 전환 지점)
 lib/seed.js     샘플 데이터 (전동 리프트 테이블 LT-500)
+lib/dxf.js      DXF 파서
+lib/mesh.js     STL·OBJ 파서, STEP/IGES 변환 연결
+lib/filestore.js 파일 원본 저장 (IndexedDB, Blob 전환 지점)
+lib/samples.js  샘플 도면·3D 모델 생성
 ```

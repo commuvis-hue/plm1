@@ -366,3 +366,60 @@ ol.timeline li:first-child::before { background: var(--blue); }
   .gantt-wrap { grid-template-columns: 140px 1fr; }
   .flow li { font-size: 12px; }
 }
+
+/* ---------- CAD 뷰어 ---------- */
+.file-link { padding: 0; font-size: inherit; text-align: left; }
+.cv-overlay {
+  position: fixed; inset: 0; z-index: 70; display: flex; flex-direction: column;
+  background: #0e171b; color: #dfe7ea;
+}
+.cv-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid #2a3a42; flex-wrap: wrap; }
+.cv-title { display: flex; gap: 12px; align-items: baseline; min-width: 0; flex-wrap: wrap; }
+.cv-title strong { font-size: 15px; }
+.cv-title .mono { color: #8fb3c1; }
+.cv-rev { font-family: var(--mono); font-size: 12px; border: 1px solid #3c5260; padding: 0 6px; border-radius: 2px; color: #b8cbd2; }
+.btn.dark { background: #1b2a31; border-color: #33474f; color: #dfe7ea; text-decoration: none; display: inline-flex; align-items: center; }
+.btn.dark:hover { border-color: #8fb3c1; }
+.btn.dark.on { background: #e3b35f; border-color: #e3b35f; color: #10191e; }
+.cv-body { flex: 1; min-height: 0; display: flex; }
+.cv-work { flex: 1; display: grid; grid-template-columns: 1fr 230px; min-height: 0; }
+.cv-stage { position: relative; min-width: 0; min-height: 0; overflow: hidden; }
+.cv-svg, .cv-canvas { width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; background: #10191e; }
+.cv-svg:active, .cv-canvas:active { cursor: grabbing; }
+.cv-svg.measuring { cursor: crosshair; }
+.cv-text { font-family: var(--font); }
+.cv-measure circle { fill: #e3b35f; }
+.cv-measure line { stroke: #e3b35f; stroke-width: 1.5; stroke-dasharray: 4 3; }
+.cv-tools { position: absolute; top: 12px; left: 12px; display: flex; gap: 6px; flex-wrap: wrap; }
+.cv-tools .btn { padding: 5px 11px; font-size: 13px; }
+.cv-status {
+  position: absolute; left: 0; right: 0; bottom: 0; display: flex; justify-content: space-between; gap: 12px;
+  padding: 6px 12px; font-size: 12px; color: #9fb4bc; background: rgba(14, 23, 27, .85); border-top: 1px solid #22323a; flex-wrap: wrap;
+}
+.cv-hint { color: #e3b35f; }
+.cv-side { border-left: 1px solid #2a3a42; padding: 16px; overflow: auto; background: #121d22; }
+.cv-side h3 { font-size: 13px; font-weight: 600; margin-bottom: 10px; color: #b8cbd2; }
+.cv-layers { list-style: none; margin: 0 0 18px; padding: 0; }
+.cv-layers label { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 13px; font-family: var(--mono); }
+.cv-layers i { width: 10px; height: 10px; display: inline-block; border: 1px solid #41545c; }
+.cv-layers input { accent-color: #e3b35f; }
+.cv-info { margin: 16px 0 0; }
+.cv-info > div { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid #22323a; font-size: 13px; }
+.cv-info dt { color: #8fa4ac; }
+.cv-info dd { margin: 0; font-family: var(--mono); }
+.cv-seg { display: flex; flex-direction: column; gap: 4px; }
+.cv-seg button { text-align: left; background: #1b2a31; border: 1px solid #33474f; color: #dfe7ea; padding: 6px 10px; border-radius: 3px; font-size: 13px; }
+.cv-seg button.on { border-color: #e3b35f; color: #e3b35f; }
+.cv-note { font-size: 12px; color: #7f949c; margin-top: 14px; }
+.cv-msg { margin: auto; max-width: 520px; padding: 24px; text-align: center; display: flex; flex-direction: column; gap: 10px; line-height: 1.7; color: #b8cbd2; }
+.cv-msg strong { color: #fff; font-size: 16px; }
+.cv-stage .cv-msg { position: absolute; inset: 0; justify-content: center; }
+.cv-loading { position: absolute; inset: 0; display: grid; place-items: center; color: #9fb4bc; font-size: 14px; pointer-events: none; }
+.cv-frame { flex: 1; border: 0; background: #fff; }
+.cv-img { flex: 1; display: grid; place-items: center; padding: 16px; overflow: auto; }
+.cv-img img { max-width: 100%; max-height: 100%; object-fit: contain; background: #fff; }
+@media (max-width: 760px) {
+  .cv-work { grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
+  .cv-side { border-left: 0; border-top: 1px solid #2a3a42; max-height: 34vh; }
+  .cv-seg { flex-direction: row; flex-wrap: wrap; }
+}
